@@ -29,10 +29,10 @@ namespace SA2HashFix
                     found = true;
                     Console.WriteLine("Checksum has been written to Chao save file.");
                 }
-                if (tempSave.Count == 0x6000)
+                if (tempSave.Count == 0x6000 || tempSave.Count == 0x3C028)
                 {
                     bool PC = false;
-                    if (!args[0].Contains(".bin") && args[0].Contains("SONIC2B__S")) { PC = true; }
+                    if (!args[0].Contains(".bin") && args[0].Contains("SONIC2B__S") && tempSave.Count == 0x6000) { PC = true; }
                     File.WriteAllBytes(args[0], WriteSaveChecksum(tempSave.ToArray(), PC));
                     found = true;
                     Console.WriteLine("Checksum has been written to save file.");
@@ -146,15 +146,53 @@ namespace SA2HashFix
         static byte[] WriteSaveChecksum(byte[] save, bool PC)
         {
             byte[] checksum = new byte[4];
-            if (PC) { checksum = BitConverter.GetBytes(save.Skip(0x2844).ToArray().Select(x => (int)x).Sum()); }
-            if (!PC) { checksum = BitConverter.GetBytes(save.Skip(0x2844).ToArray().Select(x => (int)x).Sum()).Reverse().ToArray(); }
-
             List<byte> newSave = new List<byte>();
-            newSave.AddRange(save.Take(0x2840).ToArray());
-            newSave.AddRange(checksum);
-            newSave.AddRange(save.Skip(0x2844).ToArray());
+
+            if (PC)
+            {
+                checksum = BitConverter.GetBytes(save.Skip(0x2844).ToArray().Select(x => (int)x).Sum());
+                newSave.AddRange(save.Take(0x2840).ToArray());
+                newSave.AddRange(checksum);
+                newSave.AddRange(save.Skip(0x2844).ToArray());
+            }
+            if (!PC)
+            {
+                foreach (byte[] splitSave in SplitByteArray(save, 0x6004))
+                {
+                    checksum = BitConverter.GetBytes(splitSave.Skip(0x2848).ToArray().Select(x => (int)x).Sum()).Reverse().ToArray();
+                    newSave.AddRange(splitSave.Take(0x2844).ToArray());
+                    newSave.AddRange(checksum);
+                    newSave.AddRange(splitSave.Skip(0x2848).ToArray());
+                }
+            }
+
 
             return newSave.ToArray();
+        }
+
+        public static List<byte[]> SplitByteArray(byte[] bytes, int BlockLength)
+        {
+            List<byte[]> _byteArrayList = new List<byte[]>();
+
+            byte[] buffer;
+
+            for (int i = 0; i < bytes.Length; i += BlockLength)
+            {
+                if ((i + BlockLength) > bytes.Length)
+                {
+                    buffer = new byte[bytes.Length - i];
+                    Buffer.BlockCopy(bytes, i, buffer, 0, bytes.Length - i);
+                }
+                else
+                {
+                    buffer = new byte[BlockLength];
+                    Buffer.BlockCopy(bytes, i, buffer, 0, BlockLength);
+                }
+
+                _byteArrayList.Add(buffer);
+            }
+
+            return _byteArrayList;
         }
     }
 }
